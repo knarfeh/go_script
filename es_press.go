@@ -11,6 +11,7 @@ import (
 var argEsUrl = flag.String("es_url", "", "Elasticsearch url")
 var argBulkSize = flag.Int("bulk_size", 12000, "Bluk size")
 var routineNum = flag.Int("routine_number", 10, "Go routine number")
+var argIndexNum = flag.Int("index_number", 1, "index number")
 
 type LogData struct {
 	Created_at     int64  `json:"time"`
@@ -42,21 +43,14 @@ func CreateLogdata(log_number int64, route int64) *LogData {
 		Machine:    "127.0.0.1",
 		Log_type:   "stdout",
 		Log_data: fmt.Sprintf("This is useless sentence just for extend the log length-1."+
-			"This is useless sentence just for extend the log length-2."+
-			// "This is useless sentence just for extend the log length-3"+
-			// "This is useless sentence just for extend the log length-4"+
-			// "This is useless sentence just for extend the log length-5"+
-			// "This is useless sentence just for extend the log length-6"+
-			// "This is useless sentence just for extend the log length-7"+
-			// "This is useless sentence just for extend the log length-8"+
-			// "This is useless sentence just for extend the log length-9"+
-			// "This is useless sentence just for extend the log length-10"+
-			// "This is useless sentence just for extend the log length-11"+
-			// "This is useless sentence just for extend the log length-12"+
-			// "This is useless sentence just for extend the log length-13"+
-			// "This is useless sentence just for extend the log length-14"+
-			// "This is useless sentence just for extend the log length-15"+
-			// "This is useless sentence just for extend the log length-16"+
+			"This is useless sentence just for extend the log length-2 "+
+			"This is useless sentence just for extend the log length-3"+
+			"This is useless sentence just for extend the log length-4"+
+			"This is useless sentence just for extend the log length-5"+
+			"This is useless sentence just for extend the log length-6"+
+			"This is useless sentence just for extend the log length-7"+
+			"This is useless sentence just for extend the log length-8"+
+			"This is useless sentence just for extend the log length-9"+
 			"route: %d Create log data: data number %d\n", route, log_number+int64(1)),
 		Container_name: "test",
 		App_id:         "76964db2_1022_4ba0_98b3_6b281214b007",
@@ -65,7 +59,7 @@ func CreateLogdata(log_number int64, route int64) *LogData {
 	}
 }
 
-func InsertData(client *elastic.Client, route int64) error {
+func InsertData(client *elastic.Client, route int64, index_id int) error {
 	bulkRequest := client.Bulk()
 	totalLogNumber := int64(0)
 	for {
@@ -73,7 +67,7 @@ func InsertData(client *elastic.Client, route int64) error {
 		for i := 0; i < *argBulkSize; i++ {
 			log_data := CreateLogdata(totalLogNumber, route)
 			totalLogNumber += int64(1)
-			es_index := "log-20161221"
+			es_index := fmt.Sprintf("log-2016122%d", index_id)
 			//			timestamp := time.Now().Unix()
 			//            indexNum := fmt.Sprintf("%d", timestamp * 1E9 + int64(time.Now().Nanosecond()))
 			new_index := elastic.NewBulkIndexRequest().Index(es_index).Type("log").Doc(*log_data)
@@ -99,14 +93,25 @@ func main() {
 		return
 	}
 
-	for i := 0; i < *routineNum; i++ {
+	for index_num := 1; index_num < *argIndexNum; index_num++ {
+		fmt.Printf("Create index: %d\n", index_num)
+		for i := 0; i < *routineNum; i++ {
+			client, err := GetEsClient(url)
+			if err != nil {
+				fmt.Printf("Es fail! %d. err: %v", 1*(*argIndexNum)+i, err)
+				return
+			}
+			go InsertData(client, int64(1*(*argIndexNum)+i), index_num)
+		}
+	}
+	for i := 1; i < *routineNum; i++ {
 		client, err := GetEsClient(url)
 		if err != nil {
-			fmt.Printf("Es fail! %d", i+1)
+			fmt.Printf("Es fail! %d", i)
 			return
 		}
-		go InsertData(client, int64(i+1))
+		go InsertData(client, int64(i), *argIndexNum)
 	}
 	client, _ := GetEsClient(url)
-	InsertData(client, int64(*routineNum))
+	InsertData(client, int64(*routineNum), *argIndexNum)
 }
